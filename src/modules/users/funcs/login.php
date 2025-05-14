@@ -83,6 +83,7 @@ if (defined('NV_IS_USER_FORUM') and defined('SSO_SERVER')) {
     // SSO login
     $redirect = nv_redirect_decrypt($nv_redirect) ?: (NV_BASE_SITEURL . 'index.php?' . NV_LANG_VARIABLE . '=' . NV_LANG_DATA . '&' . NV_NAME_VARIABLE . '=' . $module_name);
     $url = NukeViet\Client\Sso::getLoginUrl($redirect, $sso_rcount);
+    $url = nv_apply_hook('', 'modify_sso_login_url', [$url], $url);
     if ($nv_Request->get_int('nv_ajax', 'post', 0) == 1) {
         nv_jsonOutput([
             'sso' => $url

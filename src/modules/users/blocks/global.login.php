@@ -103,6 +103,7 @@ if (!nv_function_exists('nv_block_login')) {
 
             if (defined('NV_IS_USER_FORUM') and defined('SSO_SERVER')) {
                 $url = NukeViet\Client\Sso::getLoginUrl(empty($page_url) ? urlRewriteWithDomain(NV_BASE_SITEURL . 'index.php?' . NV_LANG_VARIABLE . '=' . NV_LANG_DATA, NV_MY_DOMAIN) : urlRewriteWithDomain($page_url, NV_MY_DOMAIN));
+                $url = nv_apply_hook('', 'modify_sso_login_url', [$url], $url);
                 $xtpl->assign('LINK_LOGIN', $url);
                 $xtpl->parse('main.login_sso');
             } else {
