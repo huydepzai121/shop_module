@@ -582,3 +582,131 @@ function nv_get_blcat_tag(int $catid, int $pos = 1): string
 {
     return $pos == 1 ? ('TCAT' . $catid) : ('BCAT' . $catid);
 }
+
+/**
+ * Lấy dữ liệu itemListElement cho phần CollectionPage
+ * Trên cơ sở lấy thêm các trường cần thiết cho schema
+ *
+ * @param array $articles
+ * @return array
+ * @throws Exception
+ */
+function get_schema_colpage_items(array $articles): array
+{
+    global $db, $module_data, $module_upload, $schema_types, $module_name, $module_config;
+
+    $ids = [];
+    foreach ($articles as $article) {
+        if (!isset($article['id'])) {
+            throw new Exception('Article ID is missing for function get_schema_collectionpage');
+        }
+        $ids[] = $article['id'];
+    }
+    $ids = implode(',', $ids);
+    if (empty($ids)) {
+        return [];
+    }
+
+    // Lấy schema_type của các bài viết này
+    $sql = 'SELECT id, schema_type FROM ' . NV_PREFIXLANG . '_' . $module_data . '_detail WHERE id IN(' . $ids . ')';
+    $result = $db->query($sql);
+
+    $articles_detail = [];
+    while ($row = $result->fetch()) {
+        $articles_detail[$row['id']] = $row;
+    }
+
+    // Lấy tác giả thuộc quyền quản lý của các bài viết này
+    $db->sqlreset()
+    ->select('l.id, l.alias, l.pseudonym')
+    ->from(NV_PREFIXLANG . '_' . $module_data . '_authorlist l
+    LEFT JOIN ' . NV_PREFIXLANG . '_' . $module_data . '_author a ON l.aid=a.id')
+    ->where('l.id IN(' . $ids . ') AND a.active=1');
+    $result = $db->query($db->sql());
+
+    $articles_authors = [];
+    while ($row = $result->fetch()) {
+        $articles_authors[$row['id']][] = $row;
+    }
+
+    $schemas = [];
+    $stt = 1;
+    $required_keys = ['link', 'homeimgthumb', 'homeimgfile', 'author'];
+    foreach ($articles as $article) {
+        // Kiểm tra các key thêm, các key như id, title bao giờ cũng phải có
+        foreach ($required_keys as $key) {
+            if (!isset($article[$key])) {
+                throw new Exception('Article ' . $key . ' is missing for function get_schema_collectionpage');
+            }
+        }
+        $schema = [
+            '@type' => 'ListItem',
+            'position' => $stt++,
+            'item' => [
+                '@type' => $schema_types[$articles_detail[$article['id'] ?? '']['schema_type']] ?? 'NewsArticle',
+                'name' => $article['title'],
+                'headline' => $article['title'],
+                'url' => urlRewriteWithDomain($article['link'], NV_MY_DOMAIN),
+            ]
+        ];
+
+        // Ảnh
+        $image = '';
+        if ($article['homeimgthumb'] == 3) {
+            // Ảnh ngoài
+            $image = $article['homeimgfile'];
+        } elseif ($article['homeimgthumb'] > 0) {
+            // Ảnh nội, lấy ảnh gốc
+            $image = NV_MY_DOMAIN . NV_BASE_SITEURL . NV_UPLOADS_DIR . '/' . $module_upload . '/' . $article['homeimgfile'];
+        } elseif (!empty($module_config[$module_name]['show_no_image'])) {
+            $image = NV_MY_DOMAIN . NV_BASE_SITEURL . $module_config[$module_name]['show_no_image'];
+        }
+        if (!empty($image)) {
+            $schema['item']['image'] = [
+                '@type' => 'ImageObject',
+                'url' => $image
+            ];
+        }
+
+        /**
+         * Tác giả
+         */
+        $schema_author = [];
+
+        // Bên trong
+        if (!empty($articles_authors[$article['id']])) {
+            foreach ($articles_authors[$article['id']] as $author) {
+                $schema_author[] = [
+                    '@type' => 'Person',
+                    'name' => $author['pseudonym'],
+                    'url' => urlRewriteWithDomain(NV_BASE_SITEURL . 'index.php?' . NV_LANG_VARIABLE . '=' . NV_LANG_DATA . '&' . NV_NAME_VARIABLE . '=' . $module_name . '&' . NV_OP_VARIABLE . '=author/' . $author['alias'], NV_MY_DOMAIN)
+                ];
+            }
+        }
+        // Bên ngoài
+        $url_aguest = NV_BASE_SITEURL . 'index.php?' . NV_LANG_VARIABLE . '=' . NV_LANG_DATA . '&' . NV_NAME_VARIABLE . '=' . $module_name . '&' . NV_OP_VARIABLE . '=author/guests';
+        if (!empty($article['author'])) {
+            $schema_author[] = [
+                '@type' => 'Person',
+                'name' => $article['author'],
+                'url' => urlRewriteWithDomain($url_aguest, NV_MAIN_DOMAIN)
+            ];
+        }
+        // Không có tác giả lấy tên người đăng
+        if (empty($schema_author)) {
+            $schema_author[] = [
+                '@type' => 'Person',
+                'name' => ($article['post_name'] ?? '') ?: 'Unknow Author',
+                'url' => urlRewriteWithDomain($url_aguest, NV_MAIN_DOMAIN)
+            ];
+        }
+        $schema['item']['author'] = array_values($schema_author);
+        if (count($schema['item']['author']) == 1) {
+            $schema['item']['author'] = $schema['item']['author'][0];
+        }
+
+        $schemas[] = $schema;
+    }
+
+    return $schemas;
+}

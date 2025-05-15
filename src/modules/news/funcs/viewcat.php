@@ -13,8 +13,8 @@ if (!defined('NV_IS_MOD_NEWS')) {
     exit('Stop!!!');
 }
 
-$cache_file = '';
-$contents = '';
+$cache_file = $contents = '';
+$schemas = [];
 $viewcat = $global_array_cat[$catid]['viewcat'];
 $set_view_page = ($page > 1 and (substr($viewcat, 0, 13) == 'viewcat_main_' or $viewcat == 'viewcat_two_column')) ? true : false;
 $page_url = $base_url = $global_array_cat[$catid]['link'];
@@ -26,8 +26,11 @@ if (!defined('NV_IS_MODADMIN') and $page < 5) {
         $cache_file = NV_LANG_DATA . '_' . $module_info['template'] . '_' . $op . '_' . $catid . '_' . $page . '_' . NV_CACHE_PREFIX . '.cache';
     }
     if (($cache = $nv_Cache->getItem($module_name, $cache_file, 3600)) != false) {
-        $contents = $cache;
+        $cache = json_decode($cache, true);
+        $contents = $cache['html'];
+        $schemas = $cache['schemas'];
     }
+    unset($cache);
 }
 
 if ($page > 1) {
@@ -123,7 +126,6 @@ if (empty($contents)) {
         $generate_page = nv_alias_page($page_title, $base_url, $num_items, $per_page, $page);
         $contents = viewcat_page_new($array_catpage, $array_cat_other, $generate_page);
     } elseif ($viewcat == 'viewcat_main_left' or $viewcat == 'viewcat_main_right' or $viewcat == 'viewcat_main_bottom') {
-        $array_catcontent = [];
         $array_subcatpage = [];
 
         $db_slave->sqlreset()
@@ -149,7 +151,7 @@ if (empty($contents)) {
 
                 $item['newday'] = $global_array_cat[$catid]['newday'];
                 $item['link'] = $global_array_cat[$catid]['link'] . '/' . $item['alias'] . '-' . $item['id'] . $global_config['rewrite_exturl'];
-                $array_catcontent[] = $item;
+                $array_catpage[] = $item;
                 $featured = $item['id'];
             }
         }
@@ -166,7 +168,7 @@ if (empty($contents)) {
 
             $item['newday'] = $global_array_cat[$catid]['newday'];
             $item['link'] = $global_array_cat[$catid]['link'] . '/' . $item['alias'] . '-' . $item['id'] . $global_config['rewrite_exturl'];
-            $array_catcontent[] = $item;
+            $array_catpage[] = $item;
         }
         unset($sql, $result);
 
@@ -220,11 +222,9 @@ if (empty($contents)) {
             unset($array_catid);
         }
         $generate_page = nv_alias_page($page_title, $base_url, $num_items, $per_page, $page);
-        $contents = viewsubcat_main($viewcat, $array_cat_other, $array_catcontent, $generate_page);
+        $contents = viewsubcat_main($viewcat, $array_cat_other, $array_catpage, $generate_page);
     } elseif ($viewcat == 'viewcat_two_column') {
         // Cac bai viet phan dau
-        $array_catcontent = [];
-
         $db_slave->sqlreset()
             ->select('COUNT(*)')
             ->from(NV_PREFIXLANG . '_' . $module_data . '_' . $catid)
@@ -250,7 +250,7 @@ if (empty($contents)) {
 
                 $item['newday'] = $global_array_cat[$catid]['newday'];
                 $item['link'] = $global_array_cat[$catid]['link'] . '/' . $item['alias'] . '-' . $item['id'] . $global_config['rewrite_exturl'];
-                $array_catcontent[] = $item;
+                $array_catpage[] = $item;
                 $featured = $item['id'];
             }
         }
@@ -268,7 +268,7 @@ if (empty($contents)) {
 
             $item['newday'] = $global_array_cat[$catid]['newday'];
             $item['link'] = $global_array_cat[$catid]['link'] . '/' . $item['alias'] . '-' . $item['id'] . $global_config['rewrite_exturl'];
-            $array_catcontent[] = $item;
+            $array_catpage[] = $item;
         }
         unset($sql, $result);
         // Het cac bai viet phan dau
@@ -325,7 +325,7 @@ if (empty($contents)) {
         unset($sql, $result);
         //Het cac bai viet cua cac chu de con
         $generate_page = nv_alias_page($page_title, $base_url, $num_items, $per_page, $page);
-        $contents = viewcat_two_column($array_catcontent, $generate_page, $array_cat_other);
+        $contents = viewcat_two_column($array_catpage, $generate_page, $array_cat_other);
     } elseif ($viewcat == 'viewcat_grid_new' or $viewcat == 'viewcat_grid_old') {
         $order_by = ($viewcat == 'viewcat_grid_new') ? $order_articles_by . ' DESC, addtime DESC' : $order_articles_by . ' ASC, addtime ASC';
 
@@ -412,9 +412,45 @@ if (empty($contents)) {
         $contents = call_user_func($viewcat, $array_catpage, $catid, ($page - 1) * $per_page, $generate_page);
     }
 
-    if (!defined('NV_IS_MODADMIN') and $contents != '' and $cache_file != '') {
-        $nv_Cache->setItem($module_name, $cache_file, $contents);
+    // Dữ liệu có cấu trúc CollectionPage
+    if (!empty($array_catpage)) {
+        $schemas_items = get_schema_colpage_items($array_catpage);
+        $schemas = [
+            '@context' => 'https://schema.org',
+            '@type' => 'CollectionPage',
+            'name' => $global_array_cat[$catid]['title'],
+            'headline' => $global_array_cat[$catid]['titlesite'] ?: $global_array_cat[$catid]['title'],
+            'description' => $global_array_cat[$catid]['description'] ?: $global_array_cat[$catid]['title'],
+            'url' => $canonicalUrl,
+            'inLanguage' => NV_LANG_DATA,
+            'mainEntity' => [
+                '@type' => 'ItemList',
+                'itemListElement' => $schemas_items,
+            ],
+            'publisher' => [
+                '@type' => 'Organization',
+                'name' => $global_config['site_name'],
+                'url' => NV_MY_DOMAIN
+            ],
+        ];
+        if (!empty($global_config['site_logo'])) {
+            $schemas['publisher']['logo'] = [
+                '@type' => 'ImageObject',
+                'url' => NV_MY_DOMAIN . NV_BASE_SITEURL . $global_config['site_logo']
+            ];
+        }
     }
+
+    if (!defined('NV_IS_MODADMIN') and $contents != '' and $cache_file != '') {
+        $nv_Cache->setItem($module_name, $cache_file, json_encode([
+            'html' => $contents,
+            'schemas' => $schemas,
+        ]));
+    }
+}
+
+if (!empty($schemas)) {
+    $nv_schemas[] = $schemas;
 }
 
 if ($page > 1) {
