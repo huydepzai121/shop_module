@@ -191,6 +191,21 @@ function showSubBreadcrumbs(a) {
     });
 }
 
+// Lắng nghe message đăng nhập Oauth
+window.addEventListener('message', function(event) {
+    if (event.origin !== location.origin) return;
+    const data = event.data;
+    if (data && data.type === 'oauthLoginCallback') {
+        $('#openidResult')
+            .attr('data-redirect', data.redirect)
+            .attr('data-result', data.result)
+            .html(data.message)
+            .addClass(data.statusClass);
+
+        $('#openidBt').click();
+    }
+});
+
 $(function() {
     winResize();
     fix_banner_center();

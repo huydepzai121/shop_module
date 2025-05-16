@@ -225,6 +225,21 @@ function nvbreadcrumbs() {
         }), f > c && ($("#brcr_" + i, a).remove(), e = !0)), e ? (b.show(), subbreadcrumbs.append('<li><a href="' + d[i][1] + '"><span><em class="fa fa-long-arrow-up"></em> ' + d[i][0] + "</span></a></li>")) : b.hide()
 }
 
+// Lắng nghe message đăng nhập Oauth
+window.addEventListener('message', function(event) {
+    if (event.origin !== location.origin) return;
+    const data = event.data;
+    if (data && data.type === 'oauthLoginCallback') {
+        $('#openidResult')
+            .attr('data-redirect', data.redirect)
+            .attr('data-result', data.result)
+            .html(data.message)
+            .addClass(data.statusClass);
+
+        $('#openidBt').click();
+    }
+});
+
 // NukeViet Default Custom JS
 $(function() {
     winResize();

@@ -522,6 +522,44 @@ function htmlEntityDecode(html) {
     return doc.documentElement.textContent;
 }
 
+/**
+ * Kiểm tra xem trình duyệt có phải là In-App Browser hay không
+ * Kiểm tra một cách tương đối
+ *
+ * @returns {Boolean}
+ */
+function isInAppBrowser() {
+    const ua = navigator.userAgent.toLowerCase();
+    const knownInAppIndicators = [
+        "fbav", // Facebook
+        "instagram",
+        "line",
+        "zalo",
+        "tiktok",
+        "messenger"
+    ];
+
+    // Kiểm tra các chuỗi đặc trưng trong UA
+    const matchesKnownApp = knownInAppIndicators.some(indicator => ua.includes(indicator));
+
+    // Kiểm tra Android WebView
+    const isAndroidWebView =
+    ua.includes("android") &&
+    (ua.includes("wv") || ua.includes("version/") && ua.includes("chrome/") && ua.includes("safari/"));
+
+    // Kiểm tra iOS WebView (không có từ "safari")
+    const isIOSWebView =
+    /iphone|ipad|ipod/.test(ua) &&
+    !ua.includes("safari") &&
+    !ua.includes("crios"); // loại trừ Chrome iOS
+
+    // Một số WebView chặn window.open
+    const blocksWindowOpen = typeof window.open !== "function";
+
+    // Tổ hợp các yếu tố
+    return matchesKnownApp || isAndroidWebView || isIOSWebView || blocksWindowOpen;
+}
+
 nv_check_timezone();
 
 nukeviet.WebAuthnSupported = 'PublicKeyCredential' in window && 'credentials' in navigator && 'create' in navigator.credentials && 'get' in navigator.credentials;
