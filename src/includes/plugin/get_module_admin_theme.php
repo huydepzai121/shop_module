@@ -41,5 +41,9 @@ nv_add_hook($module_name, 'get_module_admin_theme', $priority, function ($vars) 
         return $new_theme;
     }
 
+    if (($module_info['module_file'] ?? '') == 'shops' and in_array($op, ['content', 'tags', 'items', 'setting', 'updateprice', 'prounit', 'money', 'weight', 'tabs', 'docpay', 'blockcat', 'order', 'order_seller', 'review', 'warehouse_logs', 'discounts', 'or_view', 'main', 'cat', 'group', 'download', 'coupons', 'coupons_view', 'point', 'shipping', 'template', 'location', 'carrier', 'carrier_config', 'carrier_config_items', 'shops', 'warehouse','block','guarantee','import','suppliers','price_statistics'])) {
+        return $new_theme;
+    }
+
     return 'admin_default';
 });
